@@ -61,10 +61,8 @@ def process_data(content):
     
     # 处理每一行数据
     for line in content.splitlines():
-        match1 = re.search(pattern1, line)
-        match2 = re.search(pattern2, line)
-        
-        match = match1 if match1 else match2
+        match = re.search(pattern, line)
+
         if match:
             time_str = match.group(1)
             val1 = int(match.group(2))
