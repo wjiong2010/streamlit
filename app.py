@@ -45,6 +45,61 @@ def parse_custom_datetime(time_str):
         st.error(f"解析时间字符串 '{time_str}' 时出错: {str(e)}")
         return None
 
+
+def csv_to_txt(csv_file_path, txt_file_path):
+    """
+    将CSV文件转换为特定格式的TXT文件
+
+    参数:
+    csv_file_path (str): 输入的CSV文件路径
+    txt_file_path (str): 输出的TXT文件路径
+    """
+    try:
+        with open(csv_file_path, 'r', newline='', encoding='utf-8') as csv_file:
+            # 读取CSV文件
+            csv_reader = csv.DictReader(csv_file)
+            
+            with open(txt_file_path, 'w', encoding='utf-8') as txt_file:
+                # 写入TXT文件标题行
+                txt_file.write("X axis,Y axis,Z axis,GNSS Accuracy,Speed,Azimuth,TIME\n")
+                
+                # 处理每一行数据
+                for row in csv_reader:
+                    # 提取并转换加速度数据
+                    x_axis = row['Accel_X']
+                    y_axis = row['Accel_Y']
+                    z_axis = row['Accel_Z']
+                    
+                    # GNSS Accuracy和Azimuth置0
+                    gnss_accuracy = "0"
+                    azimuth = "0"
+                    
+                    # 计算速度 (sqrt(Horizontal_Speed^2 + Vertical_Speed^2))
+                    horizontal_speed = float(row['Horizontal_Speed'])
+                    vertical_speed = float(row['Vertical_Speed'])
+                    speed = math.sqrt(horizontal_speed**2 + vertical_speed**2)
+                    
+                    # 转换时间格式 (添加固定日期20250909)
+                    time_str = row['Time']
+                    # 确保时间格式正确 (HH:MM:SS)
+                    if len(time_str.split(':')) == 3:
+                        hours, minutes, seconds = time_str.split(':')
+                        # 添加前导零如果需要
+                        hours = hours.zfill(2)
+                        formatted_time = f"20250909{hours}{minutes}{seconds}"
+                    else:
+                        # 如果时间格式不正确，使用默认值
+                        formatted_time = "20250909000000"
+                    
+                    # 写入转换后的数据行
+                    txt_file.write(f"{x_axis},{y_axis},{z_axis},{gnss_accuracy},{speed:.1f},{azimuth},{formatted_time}\n")
+                    
+        print(f"转换完成! TXT文件已保存至: {txt_file_path}")
+        
+    except Exception as e:
+        print(f"转换过程中发生错误: {str(e)}")
+
+
 def is_format1(line):
     # 验证文件格式是否正确
     expected_header = "X axis,Y axis,Z axis,GNSS Accuracy,Speed,Azimuth,TIME".strip()
@@ -104,9 +159,9 @@ def process_data(content):
             
             try:
                 # 提取所需列数据
-                val1 = int(parts[0])
-                val2 = int(parts[1])
-                val3 = int(parts[2])
+                val1 = float(parts[0])
+                val2 = float(parts[1])
+                val3 = float(parts[2])
                 val4 = float(parts[4])  # Speed
                 
                 # 处理时间戳
@@ -156,20 +211,20 @@ def process_data(content):
     return timestamps, values1, values2, values3, values4, raw_lines
 
 
-def create_interactive_plot(timestamps, values1, values2, values3, values4):
+def create_interactive_plot(timestamps, rv_x, rv_y, rv_z, rv_speed):
     """
     创建交互式图表
     """
     # 创建单一坐标系，左轴为三轴，右轴为速度
     fig = go.Figure()
     # X轴
-    fig.add_trace(go.Scatter(x=timestamps, y=values1, name='X axis', line=dict(color='blue'), yaxis='y'))
+    fig.add_trace(go.Scatter(x=timestamps, y=rv_x, name='X axis', line=dict(color='blue'), yaxis='y'))
     # Y轴
-    fig.add_trace(go.Scatter(x=timestamps, y=values2, name='Y axis', line=dict(color='red'), yaxis='y'))
+    fig.add_trace(go.Scatter(x=timestamps, y=rv_y, name='Y axis', line=dict(color='red'), yaxis='y'))
     # Z轴
-    fig.add_trace(go.Scatter(x=timestamps, y=values3, name='Z axis', line=dict(color='green'), yaxis='y'))
+    fig.add_trace(go.Scatter(x=timestamps, y=rv_z, name='Z axis', line=dict(color='green'), yaxis='y'))
     # Speed 右轴
-    fig.add_trace(go.Scatter(x=timestamps, y=values4, name='Speed', line=dict(color='orange'), yaxis='y2'))
+    fig.add_trace(go.Scatter(x=timestamps, y=rv_speed, name='Speed', line=dict(color='orange'), yaxis='y2'))
 
     fig.update_layout(
         height=800,
