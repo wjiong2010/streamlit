@@ -211,20 +211,29 @@ def process_data(content):
     return timestamps, values1, values2, values3, values4, raw_lines
 
 
-def create_interactive_plot(timestamps, rv_x, rv_y, rv_z, rv_speed):
+def create_interactive_plot(timestamps, rv_x, rv_y, rv_z, rv_speed, cmp_x, cmp_y, cmp_z, cmp_speed):
     """
     创建交互式图表
     """
     # 创建单一坐标系，左轴为三轴，右轴为速度
     fig = go.Figure()
-    # X轴
+    # rv_X轴
     fig.add_trace(go.Scatter(x=timestamps, y=rv_x, name='X axis', line=dict(color='blue'), yaxis='y'))
-    # Y轴
+    # rv_Y轴
     fig.add_trace(go.Scatter(x=timestamps, y=rv_y, name='Y axis', line=dict(color='red'), yaxis='y'))
-    # Z轴
+    # rv_Z轴
     fig.add_trace(go.Scatter(x=timestamps, y=rv_z, name='Z axis', line=dict(color='green'), yaxis='y'))
-    # Speed 右轴
+    # cmp_X轴
+    fig.add_trace(go.Scatter(x=timestamps, y=cmp_x, name='CMP X axis', line=dict(color='cyan'), yaxis='y'))
+    # cmp_Y轴
+    fig.add_trace(go.Scatter(x=timestamps, y=cmp_y, name='CMP Y axis', line=dict(color='magenta'), yaxis='y'))
+    # cmp_Z轴
+    fig.add_trace(go.Scatter(x=timestamps, y=cmp_z, name='CMP Z axis', line=dict(color='yellow'), yaxis='y'))
+
+    # rv_Speed 右轴
     fig.add_trace(go.Scatter(x=timestamps, y=rv_speed, name='Speed', line=dict(color='orange'), yaxis='y2'))
+    # cmp_Speed 右轴
+    fig.add_trace(go.Scatter(x=timestamps, y=cmp_speed, name='CMP Speed', line=dict(color='purple'), yaxis='y2'))
 
     fig.update_layout(
         height=800,
@@ -237,30 +246,58 @@ def create_interactive_plot(timestamps, rv_x, rv_y, rv_z, rv_speed):
     )
     return fig
 
+
+def read_realvalue_file():
+    """
+    读取本地的 extra_RealData_GPS_ACC.txt 文件内容
+    """
+    try:
+        with open('extra_RealData_GPS_ACC.txt', 'r', encoding='utf-8') as file:
+            content = file.read()
+        return content
+    except Exception as e:
+        st.error(f"读取 extra_RealData_GPS_ACC.txt 文件时出错: {str(e)}")
+        return ""
+
+
 if uploaded_file is not None:
+    
+    cmp_content = read_realvalue_file()
+    cmp_timestamps, cmp_X, cmp_Y, cmp_Z, cmp_Speed, cmp_raw_lines = process_data(cmp_content)
+
     print(f"Uploaded file: {uploaded_file.name}")
     uploaded_file.seek(0)  # 确保文件指针在开头
-
     content = uploaded_file.read().decode('utf-8')
     # 处理数据
     timestamps, X, Y, Z, Speed, raw_lines = process_data(content)
-    
-    if timestamps:
-        # 创建 DataFrame
-        df = pd.DataFrame({
-            'timestamp': timestamps,
-            'X axis': X,
-            'Y axis': Y,
-            'Z axis': Z,
-            'Speed': Speed
-        })
-        
-        st.success(f"成功加载 {len(df)} 条数据")
-        
+
+    # 构建主数据DataFrame
+    main_df = pd.DataFrame({
+        'timestamp': timestamps,
+        'X axis': X,
+        'Y axis': Y,
+        'Z axis': Z,
+        'Speed': Speed
+    })
+    # 构建cmp数据DataFrame
+    cmp_df = pd.DataFrame({
+        'timestamp': cmp_timestamps,
+        'cmp_X axis': cmp_X,
+        'cmp_Y axis': cmp_Y,
+        'cmp_Z axis': cmp_Z,
+        'cmp_Speed': cmp_Speed
+    })
+
+    # 合并数据，按timestamp对齐
+    df = pd.merge(main_df, cmp_df, on='timestamp', how='inner')
+
+    if not df.empty:
+        st.success(f"成功加载 {len(df)} 条合并数据（按时间戳对齐）")
+
         # 显示数据统计
         st.subheader('数据统计')
         col1, col2, col3, col4 = st.columns(4)
-        
+
         with col1:
             st.metric("X axis 平均值", f"{df['X axis'].mean():.2f}")
             st.metric("X axis 最小值", df['X axis'].min())
@@ -270,12 +307,12 @@ if uploaded_file is not None:
             st.metric("Y axis 平均值", f"{df['Y axis'].mean():.2f}")
             st.metric("Y axis 最小值", df['Y axis'].min())
             st.metric("Y axis 最大值", df['Y axis'].max())
-        
+
         with col3:
             st.metric("Z axis 平均值", f"{df['Z axis'].mean():.2f}")
             st.metric("Z axis 最小值", df['Z axis'].min())
             st.metric("Z axis 最大值", df['Z axis'].max())
-        
+
         with col4:
             st.metric("Speed", f"{df['Speed'].mean():.2f}")
             st.metric("Speed 最小值", df['Speed'].min())
@@ -283,24 +320,24 @@ if uploaded_file is not None:
 
         # 显示时间范围
         st.write(f"时间范围: {df['timestamp'].min()} 到 {df['timestamp'].max()}")
-        
+
         # 计算时间差
         time_diff = df['timestamp'].max() - df['timestamp'].min()
         total_seconds = time_diff.total_seconds()
         st.write(f"时间跨度: {total_seconds:.3f} 秒 ({total_seconds*1000:.3f} 毫秒)")
-        
+
         # 显示原始数据
         if st.checkbox('显示原始数据'):
             st.subheader('原始数据')
             st.text_area("匹配的数据行", "\n".join(raw_lines), height=200)
-        
+
         # 选择要可视化的数值列
         selected_values = st.multiselect(
             '选择要可视化的数值',
-            options=['X axis', 'Y axis', 'Z axis', 'Speed'],
-            default=['X axis', 'Y axis', 'Z axis', 'Speed']
+            options=['X axis', 'Y axis', 'Z axis', 'Speed', 'cmp_X axis', 'cmp_Y axis', 'cmp_Z axis', 'cmp_Speed'],
+            default=['X axis', 'Y axis', 'Z axis', 'Speed', 'cmp_X axis', 'cmp_Y axis', 'cmp_Z axis', 'cmp_Speed']
         )
-        
+
         if selected_values:
             # 创建交互式图表
             st.subheader('交互式时间序列图')
@@ -309,14 +346,18 @@ if uploaded_file is not None:
                 df['X axis'] if 'X axis' in selected_values else [None]*len(df),
                 df['Y axis'] if 'Y axis' in selected_values else [None]*len(df),
                 df['Z axis'] if 'Z axis' in selected_values else [None]*len(df),
-                df['Speed'] if 'Speed' in selected_values else [None]*len(df)
+                df['Speed'] if 'Speed' in selected_values else [None]*len(df),
+                df['cmp_X axis'] if 'cmp_X axis' in selected_values else [None]*len(df),
+                df['cmp_Y axis'] if 'cmp_Y axis' in selected_values else [None]*len(df),
+                df['cmp_Z axis'] if 'cmp_Z axis' in selected_values else [None]*len(df),
+                df['cmp_Speed'] if 'cmp_Speed' in selected_values else [None]*len(df)
             )
             st.plotly_chart(fig, use_container_width=True)
-            
+
             # 显示数据表格
             st.subheader('数据表格')
             st.dataframe(df[['timestamp'] + selected_values])
-            
+
             # 提供数据下载
             csv = df[['timestamp'] + selected_values].to_csv(index=False)
             st.download_button(
@@ -326,7 +367,7 @@ if uploaded_file is not None:
                 mime="text/csv"
             )
     else:
-        st.error("未能提取任何有效数据，请检查文件格式是否正确。")
+        st.error("未能提取任何有效数据，请检查文件格式是否正确或时间戳是否能对齐。")
 else:
     st.info("请上传数据文件")
     
